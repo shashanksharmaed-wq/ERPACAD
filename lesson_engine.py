@@ -6,7 +6,7 @@ from math import floor
 DATA_PATH = "data/master.tsv"
 
 # ================= AI CONFIG (AUTO-DETECT) =================
-API_KEY = os.environ.get("GEMINI_API_KEY")
+API_KEY = os.environ.get("AIzaSyC-EsDH1Xdiwc5qOiB4ba_T94aOhc1w-AA")
 model = None
 
 if API_KEY:
@@ -169,3 +169,4 @@ Requirements:
         plan["ai_script"] = f"AI unavailable: {str(e)}"
 
     return plan
+
