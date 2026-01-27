@@ -9,7 +9,7 @@ from lesson_engine import (
 from approvals import submit_for_approval, approve_lesson, is_locked
 
 st.set_page_config(page_title="ERPACAD", layout="wide")
-st.title("ERPACAD – NCERT Academic Engine")
+st.title("ERPACAD – Advanced Academic Engine")
 
 df = load_data()
 APPROVAL_DIR = "approvals"
@@ -25,7 +25,17 @@ if role == "Teacher":
     annual_plan = calculate_annual_plan(df, grade, subject)
 
     chapter = st.selectbox("Chapter", list(annual_plan.keys()))
-    meta = {"grade": grade, "subject": subject, "chapter": chapter}
+    pedagogy = st.selectbox(
+        "Pedagogy Framework",
+        ["LEARN360", "BLOOMS", "5E"]
+    )
+
+    meta = {
+        "grade": grade,
+        "subject": subject,
+        "chapter": chapter,
+        "pedagogy": pedagogy
+    }
 
     if is_locked(meta):
         st.error("🔒 Lesson plan is approved and locked.")
@@ -33,24 +43,42 @@ if role == "Teacher":
 
     days = st.number_input("Number of Days", min_value=1, value=annual_plan[chapter])
     period_minutes = st.selectbox("Period Duration", [30, 35, 40, 45])
-    use_ai = st.checkbox("Enrich with AI (stories / rhymes)")
+    use_ai = st.checkbox("Generate detailed teaching script (AI)")
 
     if st.button("Generate Lesson Plan"):
-        plans = generate_daywise_plan(df, grade, subject, chapter, days, period_minutes)
+        plans = generate_daywise_plan(
+            df, grade, subject, chapter, days, period_minutes, pedagogy
+        )
+
         if use_ai:
-            plans = [enrich_lesson_content(p, grade, subject, chapter) for p in plans]
+            plans = [
+                enrich_lesson_content(p, grade, subject, chapter)
+                for p in plans
+            ]
+
         st.session_state["plans"] = plans
         st.session_state["meta"] = meta
 
     if "plans" in st.session_state:
         for p in st.session_state["plans"]:
-            st.markdown(f"### {p['day']}")
-            st.write("Learning Outcomes:", p["learning_outcomes"])
-            st.table(p["time_flow"])
-            st.write("TLM:", p["tlm"])
-            st.write("Assessment:", p["assessment"])
+            st.markdown(f"## {p['day']} ({p['pedagogy']})")
+
+            for phase, text in p["lesson_flow"].items():
+                st.markdown(f"### {phase}")
+                st.write(text)
+
+            st.markdown("### Learning Outcomes")
+            st.write(p["learning_outcomes"])
+
+            st.markdown("### Assessment")
+            st.write(p["assessment"])
+
+            st.markdown("### SEL Focus")
+            st.write(p["sel"])
+
             if use_ai:
-                st.write(p["enriched_content"])
+                st.markdown("### Detailed Teaching Script")
+                st.write(p["ai_detail"])
 
         if st.button("📤 Submit to Principal"):
             submit_for_approval(st.session_state["meta"], st.session_state["plans"])
@@ -71,7 +99,8 @@ if role == "Principal":
 
     for r in pending:
         with st.expander(
-            f"{r['meta']['grade']} | {r['meta']['subject']} | {r['meta']['chapter']}"
+            f"{r['meta']['grade']} | {r['meta']['subject']} | "
+            f"{r['meta']['chapter']} ({r['meta']['pedagogy']})"
         ):
             remark = st.text_area("Principal Remark", key=r["id"])
             if st.button("Approve & Lock", key=f"a_{r['id']}"):
