@@ -4,39 +4,45 @@ import google.generativeai as genai
 
 DATA_PATH = "data/master.tsv"
 
-# ---------- AI SETUP ----------
-API_KEY = os.environ.get("GEMINI_API_KEY")
+# ================= AI CONFIG (FUTURE-PROOF) =================
+API_KEY = os.environ.get("AIzaSyC-EsDH1Xdiwc5qOiB4ba_T94aOhc1w-AA")
+MODEL_NAME = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+
+model = None
 if API_KEY:
-    genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel("gemini-pro")
-else:
-    model = None
+    try:
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel(MODEL_NAME)
+    except:
+        model = None
 
 
-# ---------- LOAD DATA ----------
+# ================= LOAD DATA =================
 def load_data():
     df = pd.read_csv(DATA_PATH, sep="\t")
     df.columns = [c.strip().lower() for c in df.columns]
+
     df.rename(columns={
         "chapter name": "chapter",
         "learning outcomes": "learning_outcomes"
     }, inplace=True)
+
     return df
 
 
-# ---------- ANNUAL PLAN ----------
+# ================= ANNUAL PLAN =================
 def calculate_annual_plan(df, grade, subject):
     filtered = df[(df["grade"] == grade) & (df["subject"] == subject)]
+
     plan = {}
     for chapter in filtered["chapter"].unique():
-        lo_count = len(
-            filtered[filtered["chapter"] == chapter]["learning_outcomes"]
-        )
-        plan[chapter] = max(1, lo_count)  # 1 day per outcome (safe default)
+        lo_count = len(filtered[filtered["chapter"] == chapter])
+        plan[chapter] = max(1, lo_count)
+
     return plan
 
 
-# ---------- DAY-WISE PLAN ----------
+# ================= DAY-WISE PLAN =================
 def generate_daywise_plan(df, grade, subject, chapter, days, period_minutes):
     chapter_df = df[
         (df["grade"] == grade) &
@@ -45,7 +51,6 @@ def generate_daywise_plan(df, grade, subject, chapter, days, period_minutes):
     ]
 
     learning_outcomes = chapter_df["learning_outcomes"].tolist()
-
     plans = []
 
     for day in range(1, days + 1):
@@ -74,16 +79,17 @@ def generate_daywise_plan(df, grade, subject, chapter, days, period_minutes):
     return plans
 
 
-# ---------- AI ENRICHMENT ----------
+# ================= AI ENRICHMENT =================
 def enrich_lesson_content(day_plan, grade, subject, chapter):
     if not model:
         day_plan["enriched_content"] = "AI enrichment disabled."
         return day_plan
 
     prompt = f"""
-You are an expert Indian early-years teacher.
+You are an expert Indian NCERT teacher.
 
-Create COMPLETE teaching content (not instructions) for:
+Create COMPLETE teaching content (not instructions).
+
 Class: {grade}
 Subject: {subject}
 Chapter: {chapter}
@@ -92,16 +98,17 @@ Learning Outcomes:
 {day_plan["learning_outcomes"]}
 
 Rules:
-- Include FULL rhymes / stories / activities
-- Age-appropriate language
+- Write full rhymes, stories, activities
+- Age appropriate
+- Plain text only
 - No HTML
 - No teacher directives
-- Plain text
 """
 
     try:
-        day_plan["enriched_content"] = model.generate_content(prompt).text
-    except:
-        day_plan["enriched_content"] = "AI content could not be generated."
+        response = model.generate_content(prompt)
+        day_plan["enriched_content"] = response.text
+    except Exception as e:
+        day_plan["enriched_content"] = f"AI unavailable: {str(e)}"
 
     return day_plan
