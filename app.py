@@ -4,7 +4,9 @@ import os
 
 from annual_plan_engine import generate_annual_plan
 
-# ---------------- CONFIG ----------------
+# =====================================================
+# CONFIG
+# =====================================================
 st.set_page_config(
     page_title="ERPACAD – Academic Planning Engine",
     layout="wide"
@@ -12,7 +14,23 @@ st.set_page_config(
 
 DATA_PATH = "data/Teachshank_Master_Database_FINAL_v2.tsv"
 
-# ---------------- SAFE LOAD ----------------
+# =====================================================
+# AUTH HELPERS
+# =====================================================
+def authenticate(username, password):
+    users = st.secrets["users"]
+    if username in users and users[username] == password:
+        return True
+    return False
+
+
+def get_role(username):
+    return st.secrets["roles"].get(username, "teacher")
+
+
+# =====================================================
+# DATA HELPERS
+# =====================================================
 @st.cache_data
 def load_data():
     if not os.path.exists(DATA_PATH):
@@ -33,56 +51,127 @@ def detect_column(df, keywords):
     st.stop()
 
 
-df = load_data()
+# =====================================================
+# SESSION INIT
+# =====================================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user = None
+    st.session_state.role = None
 
+# =====================================================
+# LOGIN SCREEN
+# =====================================================
+if not st.session_state.logged_in:
+    st.title("🔐 ERPACAD Login")
+
+    with st.form("login_form"):
+        username = st.text_input("User ID")
+        password = st.text_input("Password", type="password")
+        login_btn = st.form_submit_button("Login")
+
+    if login_btn:
+        if authenticate(username, password):
+            st.session_state.logged_in = True
+            st.session_state.user = username
+            st.session_state.role = get_role(username)
+            st.success("Login successful")
+            st.rerun()
+        else:
+            st.error("Invalid ID or Password")
+
+    st.stop()
+
+# =====================================================
+# LOGOUT BUTTON
+# =====================================================
+with st.sidebar:
+    st.write(f"👤 Logged in as **{st.session_state.user}**")
+    if st.button("🚪 Logout"):
+        st.session_state.logged_in = False
+        st.session_state.user = None
+        st.session_state.role = None
+        st.rerun()
+
+# =====================================================
+# LOAD DATA
+# =====================================================
+df = load_data()
 CLASS_COL = detect_column(df, ["class", "grade", "std"])
 SUBJECT_COL = detect_column(df, ["subject"])
 
-# ---------------- UI ----------------
-st.title("📘 ERPACAD – Academic Planning Engine")
+# =====================================================
+# TEACHER VIEW
+# =====================================================
+if st.session_state.role == "teacher":
 
-col1, col2, col3 = st.columns(3)
+    st.title("📘 ERPACAD – Annual Academic Plan")
 
-with col1:
-    selected_class = st.selectbox(
-        "Class",
-        sorted(df[CLASS_COL].unique())
-    )
+    col1, col2, col3 = st.columns(3)
 
-with col2:
-    selected_subject = st.selectbox(
-        "Subject",
-        sorted(
-            df[df[CLASS_COL] == selected_class][SUBJECT_COL].unique()
+    with col1:
+        selected_class = st.selectbox(
+            "Class",
+            sorted(df[CLASS_COL].unique())
         )
+
+    with col2:
+        selected_subject = st.selectbox(
+            "Subject",
+            sorted(
+                df[df[CLASS_COL] == selected_class][SUBJECT_COL].unique()
+            )
+        )
+
+    with col3:
+        academic_days = st.number_input(
+            "Academic Working Days (School-wide)",
+            min_value=160,
+            max_value=210,
+            value=180
+        )
+
+    if st.button("📅 Generate Annual Plan"):
+        plan = generate_annual_plan(
+            df,
+            selected_class,
+            selected_subject,
+            academic_days
+        )
+
+        if not plan["chapters"]:
+            st.warning("No syllabus data found")
+        else:
+            st.success("Annual Plan Generated (CBSE-aligned)")
+
+            st.markdown(f"""
+            **Weekly Periods:** {plan['weekly_periods']}  
+            **Total Periods (Year):** {plan['total_periods']}
+            """)
+
+            st.dataframe(
+                pd.DataFrame(plan["chapters"]),
+                use_container_width=True
+            )
+
+            st.info(
+                "ℹ️ Daily lesson plans will strictly follow this annual pacing."
+            )
+
+# =====================================================
+# PRINCIPAL VIEW
+# =====================================================
+elif st.session_state.role == "principal":
+
+    st.title("📊 Principal Dashboard")
+
+    st.info(
+        "This dashboard will show syllabus completion status.\n\n"
+        "Daily lesson completion will be added next."
     )
 
-with col3:
-    academic_days = st.number_input(
-        "Academic Working Days (School-wide)",
-        min_value=160,
-        max_value=210,
-        value=180
-    )
+    st.metric("Total Classes", df[CLASS_COL].nunique())
+    st.metric("Total Subjects", df[SUBJECT_COL].nunique())
 
-# ---------------- ACTION ----------------
-if st.button("📅 Generate Annual Plan"):
-    plan = generate_annual_plan(
-        df,
-        selected_class,
-        selected_subject,
-        academic_days
-    )
+    st.write("📘 Annual planning data is active and CBSE-aligned.")
 
-    if not plan["chapters"]:
-        st.warning(plan.get("message", "No plan generated"))
-    else:
-        st.success("✅ Annual Plan Generated (CBSE-aligned, period-based)")
-
-        st.markdown(f"""
-        **Weekly Periods:** {plan['weekly_periods']}  
-        **Total Periods (Year):** {plan['total_periods']}
-        """)
-
-        plan_df = pd.DataFrame(plan["chapters"])
-        st.dataframe(plan_df, use_container_width=True)
