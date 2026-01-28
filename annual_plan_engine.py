@@ -1,9 +1,9 @@
 import pandas as pd
 import math
 
-# -----------------------------
-# CBSE weekly period guidance
-# -----------------------------
+# ---------------- CBSE GUIDELINES ----------------
+TOTAL_WEEKS = 30  # minimum CBSE instructional weeks
+
 WEEKLY_PERIODS = {
     "math": 7,
     "mathematics": 7,
@@ -15,76 +15,69 @@ WEEKLY_PERIODS = {
     "sst": 6,
 }
 
-TOTAL_WEEKS = 30  # CBSE minimum instructional weeks
-
-
-def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+# ---------------- UTILITIES ----------------
+def normalize_columns(df):
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
     return df
 
 
-def detect_chapter_column(df: pd.DataFrame) -> str:
+def detect_column(df, keywords):
     for col in df.columns:
-        if "chapter" in col:
-            return col
-    raise ValueError("❌ No chapter column found in TSV")
+        for k in keywords:
+            if k in col:
+                return col
+    raise ValueError(f"Required column not found: {keywords}")
 
 
-def detect_subject_column(df: pd.DataFrame) -> str:
-    for col in df.columns:
-        if col in ["subject", "subjects"]:
-            return col
-    raise ValueError("❌ No subject column found in TSV")
-
-
-def get_weekly_periods(subject: str) -> int:
-    if not subject:
-        return 5
+def get_weekly_periods(subject):
     s = subject.lower()
-    for key, value in WEEKLY_PERIODS.items():
+    for key, val in WEEKLY_PERIODS.items():
         if key in s:
-            return value
+            return val
     return 5  # safe default
 
 
-def generate_annual_plan(df, grade, subject, academic_days):
+# ---------------- MAIN ENGINE ----------------
+def generate_annual_plan(df, selected_class, selected_subject, academic_days):
+
     df = normalize_columns(df)
 
-    chapter_col = detect_chapter_column(df)
-    subject_col = detect_subject_column(df)
+    class_col = detect_column(df, ["class", "grade", "std"])
+    subject_col = detect_column(df, ["subject"])
+    chapter_col = detect_column(df, ["chapter"])
+    lo_col = detect_column(df, ["learning_outcome", "lo"])
 
-    # Filter data
+    # Filter subject + class
     subject_df = df[
-        (df["class"] == grade) &
-        (df[subject_col].str.lower() == subject.lower())
+        (df[class_col] == selected_class) &
+        (df[subject_col].str.lower() == selected_subject.lower())
     ]
 
     if subject_df.empty:
-        return {"chapters": [], "message": "No data found for this selection"}
+        return {"chapters": [], "message": "No syllabus data found."}
 
-    weekly_periods = get_weekly_periods(subject)
+    weekly_periods = get_weekly_periods(selected_subject)
     total_periods = TOTAL_WEEKS * weekly_periods
 
-    # Group by chapter
     chapter_groups = subject_df.groupby(chapter_col)
+    total_los = chapter_groups[lo_col].nunique().sum()
 
     chapters = []
-    total_los = chapter_groups["learning_outcome"].nunique().sum()
 
     for chapter, group in chapter_groups:
-        lo_count = group["learning_outcome"].nunique()
+        lo_count = group[lo_col].nunique()
 
-        # proportional allocation
-        chapter_periods = max(
+        # Proportional allocation (CBSE safe)
+        periods = max(
             2,
             math.ceil((lo_count / total_los) * total_periods)
         )
 
         chapters.append({
-            "chapter": chapter,
-            "learning_outcomes": lo_count,
-            "periods": chapter_periods,
-            "weeks": round(chapter_periods / weekly_periods, 1)
+            "Chapter": chapter,
+            "Learning Outcomes": lo_count,
+            "Total Periods": periods,
+            "Approx Weeks": round(periods / weekly_periods, 1)
         })
 
     return {
