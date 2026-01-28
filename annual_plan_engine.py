@@ -1,15 +1,16 @@
 """
 ERPACAD – Annual Academic Planning Engine
-PERIOD-BASED (CBSE ALIGNED)
+PERIOD-BASED | CBSE-ALIGNED | SAFE
 
-Authoritative rules:
+Core principles:
 - Principal sets ONLY total working days per class
-- Everything else is system controlled
-- Chapters are planned in TEACHING PERIODS
+- Engine plans in PERIODS, not days
+- Revision, assessment, exams, remediation are mandatory
+- Chapters cannot be rushed
 """
 
 # =====================================================
-# CONFIGURATION (ACADEMIC ASSUMPTIONS)
+# ACADEMIC CONFIGURATION (CBSE REALISTIC)
 # =====================================================
 
 PERIODS_PER_DAY = 8
@@ -22,7 +23,7 @@ CBSE_BLOCKS = {
     "buffer": 0.05
 }
 
-# Weekly subject frequency (CBSE realistic)
+# Weekly subject frequency (typical CBSE middle school)
 WEEKLY_PERIODS = {
     "Science": 5,
     "Mathematics": 5,
@@ -35,22 +36,33 @@ WEEKLY_PERIODS = {
     "EVS": 5
 }
 
-# Base chapter period requirements by class band
+# Base chapter load by class band
 BASE_CHAPTER_PERIODS = {
     "primary": 6,     # Class 1–5
     "middle": 10,     # Class 6–8
-    "secondary": 14   # Class 9–10
+    "secondary": 14  # Class 9–10
 }
 
-# Additional load for complexity & integrations
-INTEGRATION_PERIODS = 3   # art / subject / play integration (mandatory)
+# Mandatory integrations per chapter
+INTEGRATION_PERIODS = 3   # play + art/subject + language
 
 
 # =====================================================
-# HELPERS
+# INTERNAL HELPERS (TYPE SAFE)
 # =====================================================
 
-def get_class_band(grade: int) -> str:
+def normalize_grade(grade):
+    """Ensures grade is always int."""
+    try:
+        return int(grade)
+    except Exception:
+        raise ValueError(f"Invalid grade value: {grade}")
+
+
+def get_class_band(grade):
+    """Returns academic band based on grade."""
+    grade = normalize_grade(grade)
+
     if grade <= 5:
         return "primary"
     elif grade <= 8:
@@ -59,70 +71,88 @@ def get_class_band(grade: int) -> str:
 
 
 def subject_key(subject: str) -> str:
+    """Maps subject name to weekly period configuration."""
+    subject_lower = subject.lower()
+
     for key in WEEKLY_PERIODS:
-        if key.lower() in subject.lower():
+        if key.lower() in subject_lower:
             return key
+
     return "Language"
 
 
 def calculate_chapter_periods(grade, subject, lo_count):
     """
-    Determines minimum teaching periods required for a chapter.
-    Prevents unrealistically short chapters.
+    Calculates minimum required TEACHING periods for a chapter.
+    Prevents unrealistic compression.
     """
+    grade = normalize_grade(grade)
     band = get_class_band(grade)
+
     base = BASE_CHAPTER_PERIODS[band]
 
-    # Learning outcome influence (soft, capped)
+    # Learning outcome influence (soft cap)
     lo_factor = min(max(lo_count, 1), 5)
 
-    total_periods = base + lo_factor + INTEGRATION_PERIODS
+    required = base + lo_factor + INTEGRATION_PERIODS
 
-    # Absolute minimum safety
-    if band == "middle" and total_periods < 10:
-        total_periods = 10
-    if band == "secondary" and total_periods < 14:
-        total_periods = 14
+    # Absolute academic safety floors
+    if band == "middle" and required < 10:
+        required = 10
+    if band == "secondary" and required < 14:
+        required = 14
 
-    return total_periods
+    return required
 
 
 # =====================================================
-# MAIN ENGINE
+# MAIN ENGINE (PUBLIC FUNCTION)
 # =====================================================
 
 def generate_annual_plan(df, grade, subject, total_working_days):
     """
-    Returns a CBSE-aligned annual plan for ONE class + subject
-    Planned strictly in TEACHING PERIODS.
+    Generates a CBSE-aligned annual plan for ONE class + ONE subject.
+
+    Input:
+    - grade (str/int)
+    - subject (str)
+    - total_working_days (int)
+
+    Output:
+    - Period-based academic plan
     """
 
     # -----------------------------
-    # STEP 1: TOTAL PERIODS
+    # NORMALIZE INPUTS
+    # -----------------------------
+    grade = normalize_grade(grade)
+    total_working_days = int(total_working_days)
+
+    # -----------------------------
+    # TOTAL PERIODS
     # -----------------------------
     total_periods = total_working_days * PERIODS_PER_DAY
 
     teaching_periods = int(total_periods * CBSE_BLOCKS["teaching"])
 
     # -----------------------------
-    # STEP 2: WEEKLY FREQUENCY
+    # WEEKLY SUBJECT FREQUENCY
     # -----------------------------
     subject_type = subject_key(subject)
     weekly_periods = WEEKLY_PERIODS.get(subject_type, 4)
 
     # -----------------------------
-    # STEP 3: FILTER CHAPTERS
+    # FILTER CHAPTER DATA
     # -----------------------------
-    chapters_df = df[
+    subject_df = df[
         (df["grade"] == grade) &
         (df["subject"] == subject)
     ]
 
     chapters = []
-
     total_required_periods = 0
 
-    for chapter, group in chapters_df.groupby("chapter"):
+    for chapter, group in subject_df.groupby("chapter"):
         lo_count = group["learning_outcome"].nunique()
 
         required_periods = calculate_chapter_periods(
@@ -139,18 +169,22 @@ def generate_annual_plan(df, grade, subject, total_working_days):
         })
 
     # -----------------------------
-    # STEP 4: NORMALIZE IF OVERFLOW
+    # NORMALIZE IF OVERFLOW
     # -----------------------------
-    if total_required_periods > teaching_periods:
+    if total_required_periods > teaching_periods and total_required_periods > 0:
         scale = teaching_periods / total_required_periods
+
+        band = get_class_band(grade)
+        min_floor = BASE_CHAPTER_PERIODS[band]
+
         for ch in chapters:
             ch["required_periods"] = max(
                 int(ch["required_periods"] * scale),
-                BASE_CHAPTER_PERIODS[get_class_band(grade)]
+                min_floor
             )
 
     # -----------------------------
-    # STEP 5: CALCULATE APPROX WEEKS
+    # CALCULATE APPROX WEEKS
     # -----------------------------
     for ch in chapters:
         ch["approx_weeks"] = round(
@@ -159,10 +193,14 @@ def generate_annual_plan(df, grade, subject, total_working_days):
         )
         ch["status"] = "Planned"
 
+    # -----------------------------
+    # FINAL PLAN OBJECT
+    # -----------------------------
     return {
         "grade": grade,
         "subject": subject,
         "total_working_days": total_working_days,
+        "periods_per_day": PERIODS_PER_DAY,
         "total_periods": total_periods,
         "teaching_periods": teaching_periods,
         "weekly_periods": weekly_periods,
