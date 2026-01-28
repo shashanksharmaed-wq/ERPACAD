@@ -6,15 +6,28 @@ DATA_PATH = "data/Teachshank_Master_Database_FINAL.tsv"
 
 # ---------------- LOAD DATA ----------------
 def load_data():
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(f"Data file not found at {DATA_PATH}")
+
     df = pd.read_csv(DATA_PATH, sep="\t")
+
+    # normalize columns
     df.columns = [c.strip().lower() for c in df.columns]
-    df.rename(columns={
-        "grade": "grade",
-        "subject": "subject",
-        "chapter name": "chapter",
-        "learning outcomes": "learning_outcome"
-    }, inplace=True)
+
+    # handle LO column safely
+    if "learning outcomes" in df.columns:
+        df.rename(columns={"learning outcomes": "learning_outcome"}, inplace=True)
+    elif "learning outcome" in df.columns:
+        df.rename(columns={"learning outcome": "learning_outcome"}, inplace=True)
+    else:
+        raise ValueError("No Learning Outcome column found in TSV")
+
+    # normalize chapter column
+    if "chapter name" in df.columns:
+        df.rename(columns={"chapter name": "chapter"}, inplace=True)
+
     return df
+
 
 # ---------------- PERIOD STRUCTURE ----------------
 PERIOD_STRUCTURE = [
@@ -24,6 +37,7 @@ PERIOD_STRUCTURE = [
     ("Integration / Activity", 10),
     ("Closure & Assessment", 5)
 ]
+
 
 # ---------------- INTEGRATION LOGIC ----------------
 def assign_integrations(total_days):
@@ -36,12 +50,14 @@ def assign_integrations(total_days):
         integrations[-1] = "Play-Based Activity"
     return integrations
 
+
 # ---------------- AI CLIENT ----------------
 def get_ai_client():
     key = os.environ.get("OPENAI_API_KEY")
     if not key:
         return None
     return OpenAI(api_key=key)
+
 
 # ---------------- TEACHING SCRIPT ----------------
 def generate_teaching_script(
@@ -91,6 +107,7 @@ Rules:
         return res.choices[0].message.content
     except Exception as e:
         return f"AI error: {e}"
+
 
 # ---------------- CHAPTER PLAN ----------------
 def generate_chapter_plan(df, grade, subject, chapter, total_days, pedagogy, language):
