@@ -78,13 +78,21 @@ with day_col2:
 # ---------------- GENERATE PLAN ----------------
 if chapter and st.button("✨ Generate Detailed Daily Lesson Plan"):
 
-    plan = generate_daily_plan(
-        grade=grade,
-        subject=subject,
-        chapter=chapter,
-        day=day,
-        total_days=total_days
-    )
+   learning_outcomes = df[
+    (df["grade"].astype(str) == grade) &
+    (df["subject"] == subject) &
+    (df["chapter name"] == chapter)
+]["learning outcomes"].tolist()
+
+plan = generate_daily_plan(
+    grade=grade,
+    subject=subject,
+    chapter=chapter,
+    learning_outcomes=learning_outcomes,
+    day=day,
+    total_days=total_days
+)
+
 
     st.divider()
     st.subheader(f"🧠 {chapter} — Day {day} of {total_days}")
