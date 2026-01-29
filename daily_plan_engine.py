@@ -1,6 +1,6 @@
 # daily_plan_engine.py
 # ERPACAD – DEPTH-CYCLE™ Lesson Generator
-# Authoritative version – DO NOT MODIFY STRUCTURE
+# FINAL, STABLE VERSION
 
 from typing import Dict, List
 
@@ -20,7 +20,7 @@ def get_depth_profile(grade: int) -> str:
 
 
 # -------------------------------------------------
-# CORE GENERATOR
+# PUBLIC API (DO NOT RENAME)
 # -------------------------------------------------
 
 def generate_daily_plan(
@@ -33,8 +33,8 @@ def generate_daily_plan(
     period_minutes: int = 40
 ) -> Dict:
     """
-    Generates ONE DAY lesson plan.
-    Engine guarantees DEPTH, ADAPTATION, and SAFETY.
+    Generates ONE DAY lesson plan using ERPACAD DEPTH-CYCLE™
+    This is the ONLY function app.py should import.
     """
 
     depth = get_depth_profile(grade)
@@ -57,70 +57,64 @@ def generate_daily_plan(
     # -------------------------------
     # D — DISCOVER CONTEXT
     # -------------------------------
-
     plan["phases"].append({
         "code": "D",
         "name": "Discover Context",
         "minutes": 6,
         "teacher_script": [
-            f"Before we begin, think about a real-life situation related to '{chapter}'.",
-            "I want you to imagine yourself in such a situation and observe how people react."
+            f"Think about a real-life situation connected to '{chapter}'.",
+            "How do people usually react in such situations?"
         ],
         "expected_student_responses": [
-            "Students share experiences or observations.",
-            "Students connect the topic with daily life."
+            "Students share observations from daily life."
         ],
         "misconceptions": [
-            "Students may think the lesson is only about the story, not life."
+            "Students may think this is only a story, not real-life related."
         ],
         "teacher_interventions": [
-            "Guide students to see how real-life situations shape decisions and thinking."
+            "Guide students to see the connection between life and learning."
         ],
         "assessment_evidence": [
-            "Students verbally connect topic with lived experience."
+            "Students verbally connect topic to lived experience."
         ]
     })
 
     # -------------------------------
     # E — EXPOSE CORE CONTENT
     # -------------------------------
-
     plan["phases"].append({
         "code": "E",
         "name": "Expose Core Content",
         "minutes": 10,
         "teacher_script": [
-            f"I will now read and explain the key portion of '{chapter}'.",
-            "Listen carefully to the language, emotions, and ideas."
+            f"I will now read and explain an important part of '{chapter}'.",
+            "Listen carefully to the language and ideas."
         ],
         "expected_student_responses": [
-            "Students listen attentively.",
-            "Students identify key events or ideas."
+            "Students listen and identify key ideas."
         ],
         "misconceptions": [
-            "Students may focus only on plot, not meaning."
+            "Students may focus only on events, not meaning."
         ],
         "teacher_interventions": [
-            "Pause reading to clarify meanings and context.",
-            "Explain difficult words using examples."
+            "Pause to explain difficult words and ideas."
         ],
         "assessment_evidence": [
-            "Students can retell the idea in their own words."
+            "Students can explain the idea in their own words."
         ]
     })
 
     # -------------------------------
     # P — PROBE THINKING
     # -------------------------------
-
     probe_questions = [
-        f"Why do you think the characters act the way they do in '{chapter}'?",
-        "What would you have done differently in the same situation?"
+        f"Why do you think the characters behave the way they do in '{chapter}'?",
+        "What choice would you make in the same situation?"
     ]
 
     if depth in ["MIDDLE", "SECONDARY"]:
         probe_questions.append(
-            "What does this situation reveal about human nature or society?"
+            "What does this situation reveal about human behaviour or society?"
         )
 
     plan["phases"].append({
@@ -129,33 +123,30 @@ def generate_daily_plan(
         "minutes": 8,
         "teacher_script": probe_questions,
         "expected_student_responses": [
-            "Students justify answers with reasons.",
-            "Students refer to events or ideas from the chapter."
+            "Students justify answers using reasons."
         ],
         "misconceptions": [
-            "Students may give moral answers without explanation."
+            "Students may answer emotionally without evidence."
         ],
         "teacher_interventions": [
-            "Ask follow-up 'why' and 'how' questions.",
-            "Encourage evidence-based responses."
+            "Ask follow-up questions to push deeper reasoning."
         ],
         "assessment_evidence": [
-            "Students explain reasoning, not just opinions."
+            "Students support answers with examples or context."
         ]
     })
 
     # -------------------------------
     # T — TRANSFORM UNDERSTANDING
     # -------------------------------
-
     transform_tasks = [
         "Students write one sentence connecting the lesson to their own life.",
         "Students discuss how the idea applies beyond the classroom."
     ]
 
-    if depth == "SECONDARY":
+    if exam_mode:
         transform_tasks.append(
-            "Students link the theme with possible examination questions."
+            "Students link the theme to possible exam-style questions."
         )
 
     plan["phases"].append({
@@ -163,33 +154,30 @@ def generate_daily_plan(
         "name": "Transform Understanding",
         "minutes": 10,
         "teacher_script": [
-            "Let us now apply what we learned in a meaningful way."
+            "Let us now apply what we have understood."
         ],
         "expected_student_responses": transform_tasks,
         "misconceptions": [
-            "Students may repeat textbook language instead of original thinking."
+            "Students may repeat textbook language without understanding."
         ],
         "teacher_interventions": [
-            "Encourage originality and clarity.",
-            "Model one strong example."
+            "Model one clear, original example."
         ],
         "assessment_evidence": [
-            "Written or spoken responses showing application."
+            "Original student responses showing application."
         ]
     })
 
     # -------------------------------
     # H — HARVEST EVIDENCE
     # -------------------------------
-
     harvest_notes = [
-        "Students summarise the lesson in one sentence.",
-        "Teacher observes participation and clarity."
+        "Students summarise the lesson in one sentence."
     ]
 
     if exam_mode:
         harvest_notes.append(
-            "Teacher highlights how this learning may appear in board exams."
+            "Teacher highlights how this learning can be assessed in exams."
         )
 
     plan["phases"].append({
@@ -200,13 +188,13 @@ def generate_daily_plan(
             "Let us reflect on what we learned today."
         ],
         "expected_student_responses": [
-            "Students summarise key understanding."
+            "Students share key takeaways."
         ],
         "misconceptions": [
-            "Students may recall facts but miss meaning."
+            "Students may recall facts but miss deeper meaning."
         ],
         "teacher_interventions": [
-            "Rephrase student responses to reinforce clarity."
+            "Rephrase responses to reinforce clarity."
         ],
         "assessment_evidence": harvest_notes
     })
