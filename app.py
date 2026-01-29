@@ -110,24 +110,37 @@ if chapter and st.button("✨ Generate Detailed Daily Lesson Plan"):
         **Class:** {meta.get("grade")}  
         **Subject:** {meta.get("subject")}  
         **Grade Band:** {meta.get("band")}  
+        **Tone:** {meta.get("tone")}
         """
     )
 
     st.divider()
 
     # ---------------- LESSON FLOW ----------------
-    st.header("📚 Detailed Teaching Script")
+    st.header("📚 Detailed Teaching Script (DEPTH++)")
 
     for step in plan["flow"]:
         with st.expander(step["phase"], expanded=True):
 
-            st.markdown("**🧑‍🏫 Teacher says:**")
-            st.write(step["teacher_says"])
+            st.markdown("### 🧑‍🏫 Teacher Script")
+            st.write(step["teacher_script"])
 
-            st.markdown("**👩‍🎓 Students do:**")
-            st.write(step["students_do"])
+            st.markdown("### 👩‍🎓 Expected Student Response")
+            st.write(step["student_expected"])
 
-            st.markdown("**🎯 Purpose:**")
+            st.markdown("### ⚠️ Common Misconceptions")
+            st.write(step["misconceptions"])
+
+            st.markdown("### 🛠️ Teacher Correction")
+            st.write(step["teacher_correction"])
+
+            st.markdown("### 🧾 Board Work")
+            st.write(step["board_work"])
+
+            st.markdown("### 🧠 Skills Focus")
+            st.write(step["skills"])
+
+            st.markdown("### 🎯 Purpose")
             st.write(step["purpose"])
 
-    st.success("✅ Lesson plan generated successfully")
+    st.success("✅ DEPTH++ Lesson plan generated successfully")
