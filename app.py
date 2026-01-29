@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from daily_plan_engine import generate_daily_plan
 
 # ---------------- PAGE CONFIG ----------------
@@ -7,27 +8,51 @@ st.set_page_config(
     layout="wide"
 )
 
+# ---------------- LOAD DATA ----------------
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data/master.tsv", sep="\t")
+    df.columns = [c.strip().lower() for c in df.columns]
+    return df
+
+df = load_data()
+
 # ---------------- HEADER ----------------
 st.title("📘 ERPACAD – Academic Planning Engine")
 st.caption("CBSE-aligned • Deep lesson planning • Teacher-ready")
 
-# ---------------- INPUTS ----------------
+# ---------------- CLASS / SUBJECT / CHAPTER ----------------
 col1, col2, col3 = st.columns(3)
 
 with col1:
     grade = st.selectbox(
         "Class",
-        ["NURSERY", "KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+        sorted(df["grade"].astype(str).unique())
     )
 
 with col2:
-    subject = st.selectbox(
-        "Subject",
-        ["English", "Hindi", "Maths", "EVS", "Science", "Social Science"]
+    subjects = (
+        df[df["grade"].astype(str) == grade]["subject"]
+        .dropna()
+        .unique()
     )
+    subject = st.selectbox("Subject", sorted(subjects))
 
 with col3:
-    chapter = st.text_input("Chapter Name", "A Letter to God")
+    chapters = (
+        df[
+            (df["grade"].astype(str) == grade) &
+            (df["subject"] == subject)
+        ]["chapter name"]
+        .dropna()
+        .unique()
+    )
+
+    if len(chapters) == 0:
+        st.warning("No chapters found for this class & subject")
+        chapter = None
+    else:
+        chapter = st.selectbox("Chapter", sorted(chapters))
 
 st.divider()
 
@@ -50,8 +75,8 @@ with day_col2:
         value=1
     )
 
-# ---------------- GENERATE ----------------
-if st.button("✨ Generate Detailed Daily Lesson Plan"):
+# ---------------- GENERATE PLAN ----------------
+if chapter and st.button("✨ Generate Detailed Daily Lesson Plan"):
 
     plan = generate_daily_plan(
         grade=grade,
@@ -76,7 +101,7 @@ if st.button("✨ Generate Detailed Daily Lesson Plan"):
 
     st.divider()
 
-    # ---------------- MAIN CONTENT ----------------
+    # ---------------- LESSON SCRIPT ----------------
     st.header("📚 Detailed Teaching Script")
 
     for step in plan["flow"]:
@@ -90,7 +115,5 @@ if st.button("✨ Generate Detailed Daily Lesson Plan"):
 
             st.markdown("**🎯 Purpose:**")
             st.write(step["purpose"])
-
-    st.divider()
 
     st.success("✅ Lesson plan generated successfully")
