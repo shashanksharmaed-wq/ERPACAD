@@ -1,88 +1,129 @@
-import streamlit as st
-from daily_plan_engine import generate_daily_plan
+def generate_daily_plan(
+    grade,
+    subject,
+    chapter,
+    day,
+    total_days,
+    learning_outcomes=None
+):
+    """
+    DEPTH++ Daily Lesson Generator
+    Stable for ALL grades including NURSERY / KG
+    """
 
-st.set_page_config(page_title="ERPACAD – DEPTH++", layout="wide")
-
-st.title("📘 ERPACAD – Academic Planning Engine")
-st.caption("Deep lesson planning • Teacher-performance focused • DEPTH++")
-
-# ----------------------------
-# HARD-CODED SAFE DATA (NO FILE ERRORS)
-# ----------------------------
-
-DATA = {
-    "NURSERY": {
-        "English": ["Rhymes and Sounds"]
-    },
-    "1": {
-        "English": ["A Letter to God"],
-        "Maths": ["Numbers up to 10"]
-    },
-    "7": {
-        "English": [
-            "The Cop and the Anthem",
-            "The Shed",
-            "The Story of Cricket"
-        ]
+    plan = {
+        "meta": {
+            "grade": str(grade),
+            "subject": subject,
+            "chapter": chapter,
+            "day": day,
+            "total_days": total_days
+        },
+        "blocks": []
     }
-}
 
-# ----------------------------
-# SELECTORS
-# ----------------------------
+    # ---------- BLOCK 1 ----------
+    plan["blocks"].append({
+        "title": "Context Setting & Emotional Readiness",
+        "minutes": 5,
+        "teacher_says": (
+            "Children, today we are going to listen carefully to sounds. "
+            "Close your eyes for a moment. Can you hear my clap?"
+        ),
+        "teacher_does": (
+            "Teacher claps softly, then loudly. "
+            "Pauses between each sound."
+        ),
+        "students_expected": (
+            "Students say 'Yes', some say 'loud', some repeat the sound."
+        ),
+        "students_misconceptions": (
+            "Some students may shout randomly or copy without listening."
+        ),
+        "teacher_correction": (
+            "Teacher calmly says: 'We listen first, then we speak. "
+            "Let us try again slowly.'"
+        ),
+        "tlm_or_boardwork": (
+            "No diagram. Use body movements and sound play."
+        )
+    })
 
-col1, col2, col3 = st.columns(3)
+    # ---------- BLOCK 2 ----------
+    plan["blocks"].append({
+        "title": "Core Concept Unpacking – Sound Differences",
+        "minutes": 10,
+        "teacher_says": (
+            "Listen carefully: clap… tap… snap. "
+            "Each sound is different. Which one was loudest?"
+        ),
+        "teacher_does": (
+            "Teacher demonstrates sounds using hands and desk."
+        ),
+        "students_expected": (
+            "Students say 'clap' or point to hands."
+        ),
+        "students_misconceptions": (
+            "Students may focus on action, not sound."
+        ),
+        "teacher_correction": (
+            "Teacher says: 'We are not watching hands. "
+            "We are listening to ears.' Repeats sounds."
+        ),
+        "tlm_or_boardwork": (
+            "Teacher draws ear symbol on board (simple)."
+        )
+    })
 
-with col1:
-    grade = st.selectbox("Class", list(DATA.keys()))
+    # ---------- BLOCK 3 ----------
+    plan["blocks"].append({
+        "title": "Guided Practice – Rhyme Exposure",
+        "minutes": 8,
+        "teacher_says": (
+            "Teacher recites the rhyme slowly and clearly:\n\n"
+            "'Clap your hands, tap your feet,\n"
+            "Listen close to sounds you meet.'"
+        ),
+        "teacher_does": (
+            "Teacher uses hand actions matching rhyme."
+        ),
+        "students_expected": (
+            "Students repeat words and actions."
+        ),
+        "students_misconceptions": (
+            "Some students may shout without rhythm."
+        ),
+        "teacher_correction": (
+            "Teacher slows pace and models correct rhythm again."
+        ),
+        "tlm_or_boardwork": (
+            "No diagram. Teacher models actions."
+        )
+    })
 
-with col2:
-    subject = st.selectbox("Subject", list(DATA[grade].keys()))
+    # ---------- BLOCK 4 ----------
+    plan["blocks"].append({
+        "title": "Assessment & Closure",
+        "minutes": 5,
+        "teacher_says": (
+            "Today we learned that sounds can be loud or soft. "
+            "Tell me one sound you heard today."
+        ),
+        "teacher_does": (
+            "Teacher points to ear symbol on board."
+        ),
+        "students_expected": (
+            "Students say 'clap', 'tap', or mimic sounds."
+        ),
+        "students_misconceptions": (
+            "Some students may stay silent."
+        ),
+        "teacher_correction": (
+            "Teacher encourages gently and repeats sound options."
+        ),
+        "tlm_or_boardwork": (
+            "Board symbol remains for recall."
+        )
+    })
 
-with col3:
-    total_days = st.number_input(
-        "Academic Working Days (School-wide)",
-        min_value=100,
-        max_value=240,
-        value=180
-    )
-
-chapter = st.selectbox(
-    "Chapter",
-    DATA[grade][subject]
-)
-
-day = st.number_input(
-    "Day of Chapter",
-    min_value=1,
-    max_value=20,
-    value=1
-)
-
-st.divider()
-
-# ----------------------------
-# GENERATE PLAN
-# ----------------------------
-
-if st.button("Generate Daily Lesson Plan"):
-    plan = generate_daily_plan(
-        grade=grade,
-        subject=subject,
-        chapter=chapter,
-        day=day,
-        total_days=total_days
-    )
-
-    st.subheader("🧠 Detailed Teaching Script (DEPTH++)")
-
-    for section in plan["sections"]:
-        with st.expander(section["title"], expanded=True):
-            st.markdown("**👩‍🏫 Teacher does:**")
-            st.write(section["teacher"])
-
-            st.markdown("**🧒 Students do:**")
-            st.write(section["students"])
-
-            st.markdown("**🎯 Purpose:**")
-            st.write(section["purpose"])
+    return plan
