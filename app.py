@@ -6,24 +6,22 @@ from openai import OpenAI
 # 1. APP CONFIGURATION
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Teach+", 
-    page_icon="🎓", 
+    page_title="Teach+ Pro", 
+    page_icon="⏱️", 
     layout="wide"
 )
 
-# App Title & Branding
-st.title("🎓 Teach+ Lesson Architect")
-st.markdown("### The AI Academic Director")
+st.title("⏱️ Teach+ Precision Planner")
+st.markdown("### The Phase-Specific Micro-Planner")
 
 # -----------------------------------------------------------------------------
-# 2. LOAD DATABASE FROM GITHUB
+# 2. LOAD DATABASE
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_data():
-    # NOTE: Keep this filename matching exactly what you uploaded to GitHub
+    # Ensure this filename matches your uploaded file exactly
     file_path = "Teachshank_Master_Database_FINAL.tsv"
     try:
-        # Load TSV (Tab Separated Values)
         df = pd.read_csv(file_path, sep='\t')
         return df
     except FileNotFoundError:
@@ -31,107 +29,127 @@ def load_data():
         return pd.DataFrame()
 
 df = load_data()
-
 if df.empty:
-    st.stop()  # Stop app if data isn't loaded
+    st.stop()
 
 # -----------------------------------------------------------------------------
-# 3. SIDEBAR: CURRICULUM CONTROLS
+# 3. SIDEBAR: PRECISION CONTROLS
 # -----------------------------------------------------------------------------
-st.sidebar.header("🗓️ Teach+ Curriculum Controls")
+st.sidebar.header("🗓️ Scheduling Controls")
 
-# A. Grade Selection
+# A. Hierarchy Selection
 grade_list = sorted(df['Grade'].astype(str).unique().tolist())
 selected_grade = st.sidebar.selectbox("Select Grade", grade_list)
 
-# B. Subject Selection (Filtered by Grade)
 subject_list = sorted(df[df['Grade'].astype(str) == selected_grade]['Subject'].unique().tolist())
 selected_subject = st.sidebar.selectbox("Select Subject", subject_list)
 
-# C. Chapter Selection (Filtered by Subject)
-chapter_df = df[
-    (df['Grade'].astype(str) == selected_grade) & 
-    (df['Subject'] == selected_subject)
-]
+chapter_df = df[(df['Grade'].astype(str) == selected_grade) & (df['Subject'] == selected_subject)]
 chapter_list = sorted(chapter_df['Chapter Name'].unique().tolist())
 selected_chapter = st.sidebar.selectbox("Select Chapter", chapter_list)
 
-# D. Learning Outcomes Preview
+# B. Smart Context
 relevant_data = chapter_df[chapter_df['Chapter Name'] == selected_chapter]
 learning_outcomes = relevant_data['Learning Outcomes'].dropna().tolist()
 
 st.sidebar.markdown("---")
-day_number = st.sidebar.number_input("Academic Day (e.g., Day 12 of 180)", min_value=1, max_value=210, value=12)
-duration = st.sidebar.slider("Class Duration (Minutes)", 30, 90, 45)
 
-# Display context in main area
-with st.expander("📚 View Selected Learning Outcomes", expanded=True):
-    if learning_outcomes:
-        for lo in learning_outcomes:
-            st.write(f"- {lo}")
-    else:
-        st.write("No specific outcomes listed for this selection.")
+# C. Time & Sequence Controls
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    day_number = st.number_input("Academic Day", min_value=1, max_value=210, value=12)
+with col2:
+    duration = st.number_input("Duration (Mins)", min_value=30, max_value=60, value=40, step=5)
+
+# D. Lesson Phase Selector (The Duplicate Killer)
+# This lets the teacher specify if this is the Start, Middle, or End of the topic
+lesson_phase = st.sidebar.radio(
+    "Lesson Phase (prevents duplicate plans):",
+    ["Part 1: Concept Launch (Intro)", 
+     "Part 2: Deep Dive (Exploration)", 
+     "Part 3: Application (Workbook/Practice)", 
+     "Part 4: Assessment (Check for Understanding)"],
+    index=0
+)
+
+# Display Learning Outcomes
+with st.expander("🎯 Target Learning Outcomes for this Chapter", expanded=True):
+    for lo in learning_outcomes:
+        st.write(f"- {lo}")
 
 # -----------------------------------------------------------------------------
-# 4. THE TEACH+ AI ENGINE
+# 4. THE PRECISION AI ENGINE
 # -----------------------------------------------------------------------------
-def generate_micro_plan(grade, subject, chapter, outcomes, day, duration):
-    # This prompt is engineered for "Micro-Scripting" depth
-    prompt = f"""
-    You are the 'Teach+' AI Academic Director.
-    Your task is to generate a 'Micro-Lesson Script' that beats the quality of premium frameworks like Chrysalis/EDAC.
+def generate_precision_plan(grade, subject, chapter, outcomes, day, duration, phase):
     
-    TEACHING CONTEXT:
+    # Calculate exact minute splits
+    t_engage = int(duration * 0.15)  # 15%
+    t_explore = int(duration * 0.30) # 30%
+    t_explain = int(duration * 0.25) # 25%
+    t_elaborate = int(duration * 0.20) # 20%
+    t_evaluate = duration - (t_engage + t_explore + t_explain + t_elaborate) # Remainder
+
+    prompt = f"""
+    You are the 'Teach+' Precision Planner.
+    
+    CRITICAL INSTRUCTION:
+    The user is asking for Day {day}. 
+    This is **{phase}** of the chapter "{chapter}".
+    **DO NOT** generate a generic introduction if the phase is "Deep Dive" or "Application".
+    **DO NOT** repeat content from previous days. This specific lesson must fit the phase exactly.
+
+    CONTEXT:
     - **Grade:** {grade}
     - **Subject:** {subject}
     - **Chapter:** {chapter}
-    - **Day:** {day} of 180 (Term 1)
-    - **Duration:** {duration} Minutes
-    - **Target Learning Outcomes:** {outcomes}
-    
-    STRICT OUTPUT FORMAT (Use Markdown):
-    
-    ## 1. Metadata
-    - **The Why:** (Why are we teaching this? Link to real life)
-    - **The What:** (Specific Concept)
-    - **The Who:** (Cognitive readiness of this age group)
+    - **Outcomes:** {outcomes}
+    - **Total Duration:** {duration} Minutes
 
-    ## 2. The 5E Micro-Script (Must be dialogue-heavy)
-    
-    ### I. ENGAGE (First 15%)
-    - **The Hook Action:** (Specific physical prop or movement)
-    - **Teacher Script:** "Write exactly what the teacher says here..."
-    
-    ### II. EXPLORE (Next 25%)
-    - **The Activity:** (Hands-on, sensory, or inquiry-based)
-    - **Micro-Instruction:** "Step-by-step instructions for the students..."
-    
-    ### III. EXPLAIN (Next 20%)
-    - **Concept & Vocabulary:** (Define specific terms)
-    - **Misconception Alert:** (What will students likely get wrong?)
-    
-    ### IV. ELABORATE (Next 20%)
-    - **Application:** (Cross-curricular link or real-world problem)
-    - **Differentiation:** - *Advanced:* (Challenge task)
-        - *Struggling:* (Support strategy)
-        
-    ### V. EVALUATE (Final 20%)
-    - **Exit Ticket:** (A quick check for understanding)
-    - **Success Criteria:** (How do we know they learned it?)
+    OUTPUT FORMAT (Markdown):
 
-    Do not summarize. Script the lesson dialogue for the teacher.
+    ## 1. Lesson Metadata
+    - **Micro-Topic:** (Specific sub-topic for Day {day})
+    - **Cognitive Goal:** (What will they master by minute {duration}?)
+
+    ## 2. The Timed 5E Script (Strict Timeline)
+
+    ### ⏰ 00:00 - 00:{t_engage:02d} | I. ENGAGE (The Hook)
+    - **Exact Script:** "Teacher says..."
+    - **Physical Action:** (Prop/Movement)
+
+    ### ⏰ 00:{t_engage:02d} - 00:{t_engage+t_explore:02d} | II. EXPLORE (The Activity)
+    - **Activity Name:** ...
+    - **Micro-Steps:**
+      1. ...
+      2. ...
+    - **Teacher's Role:** (What to observe)
+
+    ### ⏰ 00:{t_engage+t_explore:02d} - 00:{t_engage+t_explore+t_explain:02d} | III. EXPLAIN (The Concept)
+    - **Board Work:** (What to draw/write)
+    - **Scripted Explanation:** "Teacher explains..."
+    - **Vocabulary Check:** ...
+
+    ### ⏰ 00:{t_engage+t_explore+t_explain:02d} - 00:{t_engage+t_explore+t_explain+t_elaborate:02d} | IV. ELABORATE (Application)
+    - **Differentiation:**
+      - *Advanced:* ...
+      - *Struggling:* ...
+
+    ### ⏰ 00:{t_engage+t_explore+t_explain+t_elaborate:02d} - 00:{duration:02d} | V. EVALUATE (Exit Ticket)
+    - **The Task:** ...
+    - **Success Criteria:** ...
+
+    Ensure the content is distinctly tailored to **{phase}**.
     """
     
     try:
-        # Use Streamlit Secrets for the API Key
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
         response = client.chat.completions.create(
-            model="gpt-4o",  # Recommended for maximum depth
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a master pedagogue specializing in 5E lesson planning."},
+                {"role": "system", "content": "You are an expert curriculum designer. You hate generic lesson plans. You love precision."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.6 # Lower temperature for more consistent, less random results
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -140,27 +158,27 @@ def generate_micro_plan(grade, subject, chapter, outcomes, day, duration):
 # -----------------------------------------------------------------------------
 # 5. GENERATE BUTTON
 # -----------------------------------------------------------------------------
-if st.button("✨ Generate Teach+ Micro-Plan"):
+if st.button("🚀 Generate Timed Micro-Plan"):
     if "OPENAI_API_KEY" not in st.secrets:
         st.error("⚠️ OpenAI API Key is missing! Please add it to Streamlit Secrets.")
     else:
-        with st.spinner("Teach+ is designing your micro-lesson..."):
-            plan = generate_micro_plan(
+        with st.spinner(f"Designing Day {day_number} ({lesson_phase})..."):
+            plan = generate_precision_plan(
                 selected_grade, 
                 selected_subject, 
                 selected_chapter, 
                 learning_outcomes, 
                 day_number, 
-                duration
+                duration,
+                lesson_phase
             )
             
             st.markdown("---")
             st.markdown(plan)
             
-            # Download capability
             st.download_button(
-                label="📥 Download Teach+ Plan",
+                label="📥 Download Timed Plan",
                 data=plan,
-                file_name=f"TeachPlus_Plan_{selected_grade}_{selected_subject}_Day{day_number}.md",
+                file_name=f"TeachPlus_G{selected_grade}_{selected_subject}_Day{day_number}.md",
                 mime="text/markdown"
             )
