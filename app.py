@@ -1,25 +1,25 @@
 import streamlit as st
 import pandas as pd
 from openai import OpenAI
+import math
 
 # -----------------------------------------------------------------------------
 # 1. APP CONFIGURATION
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Teach+ Pro", 
-    page_icon="⏱️", 
+    page_title="Teach+ Annual Planner", 
+    page_icon="📅", 
     layout="wide"
 )
 
-st.title("⏱️ Teach+ Precision Planner")
-st.markdown("### The Phase-Specific Micro-Planner")
+st.title("📅 Teach+ Annual Curriculum Manager")
+st.markdown("### Strategic Pacing & Micro-Planning")
 
 # -----------------------------------------------------------------------------
 # 2. LOAD DATABASE
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_data():
-    # Ensure this filename matches your uploaded file exactly
     file_path = "Teachshank_Master_Database_FINAL.tsv"
     try:
         df = pd.read_csv(file_path, sep='\t')
@@ -33,77 +33,150 @@ if df.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 3. SIDEBAR: PRECISION CONTROLS
+# 3. SIDEBAR: HIGH-LEVEL SELECTION
 # -----------------------------------------------------------------------------
-st.sidebar.header("🗓️ Scheduling Controls")
+st.sidebar.header("1️⃣ Select Class & Subject")
 
-# A. Hierarchy Selection
+# A. Grade Selection
 grade_list = sorted(df['Grade'].astype(str).unique().tolist())
 selected_grade = st.sidebar.selectbox("Select Grade", grade_list)
 
+# B. Subject Selection
 subject_list = sorted(df[df['Grade'].astype(str) == selected_grade]['Subject'].unique().tolist())
 selected_subject = st.sidebar.selectbox("Select Subject", subject_list)
 
-chapter_df = df[(df['Grade'].astype(str) == selected_grade) & (df['Subject'] == selected_subject)]
-chapter_list = sorted(chapter_df['Chapter Name'].unique().tolist())
-selected_chapter = st.sidebar.selectbox("Select Chapter", chapter_list)
+# Filter Data for this selection
+subject_data = df[
+    (df['Grade'].astype(str) == selected_grade) & 
+    (df['Subject'] == selected_subject)
+]
 
-# B. Smart Context
-relevant_data = chapter_df[chapter_df['Chapter Name'] == selected_chapter]
-learning_outcomes = relevant_data['Learning Outcomes'].dropna().tolist()
+# -----------------------------------------------------------------------------
+# 4. INTELLIGENT CALENDAR GENERATOR
+# -----------------------------------------------------------------------------
+def generate_annual_calendar(data, total_days=180):
+    """
+    Allocates days to chapters based on the number of learning outcomes (Complexity Weighting).
+    """
+    # 1. Get Chapter List and Outcome Counts
+    chapter_groups = data.groupby('Chapter Name')['Learning Outcomes'].count().reset_index()
+    chapter_groups.columns = ['Chapter', 'Outcome_Count']
+    
+    # 2. Calculate Total Outcomes
+    total_outcomes = chapter_groups['Outcome_Count'].sum()
+    if total_outcomes == 0: return pd.DataFrame()
 
-st.sidebar.markdown("---")
+    # 3. Allocation Logic (Weighted Distribution)
+    # Formula: (Chapter_Outcomes / Total_Outcomes) * 180 Days
+    chapter_groups['Allocated_Days'] = (chapter_groups['Outcome_Count'] / total_outcomes) * total_days
+    chapter_groups['Allocated_Days'] = chapter_groups['Allocated_Days'].apply(lambda x: math.ceil(x)) # Round up
+    
+    # 4. Create the Day-by-Day Schedule
+    schedule = []
+    current_day = 1
+    
+    # Organize chapters roughly by appearance (assuming DB order matters, if not we sort alphabetical)
+    # Ideally, your DB would have a 'Sequence' column. For now, we take them as they appear.
+    # We re-sort based on original dataframe index to preserve logical flow if it exists
+    ordered_chapters = data['Chapter Name'].unique()
+    
+    for chap in ordered_chapters:
+        row = chapter_groups[chapter_groups['Chapter'] == chap].iloc[0]
+        days = int(row['Allocated_Days'])
+        
+        # Get Outcomes for this chapter
+        outcomes = data[data['Chapter Name'] == chap]['Learning Outcomes'].tolist()
+        
+        for d in range(days):
+            if current_day > total_days: break
+            
+            # Outcome Distribution: Rotate through outcomes for the days allocated
+            daily_outcome = outcomes[d % len(outcomes)]
+            
+            # Determine Phase
+            phase = "Concept Launch" if d == 0 else ("Assessment" if d == days-1 else "Deep Dive / Practice")
+            
+            schedule.append({
+                "Day #": current_day,
+                "Chapter": chap,
+                "Focus Outcome": daily_outcome,
+                "Lesson Phase": phase
+            })
+            current_day += 1
+            
+    return pd.DataFrame(schedule)
 
-# C. Time & Sequence Controls
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    day_number = st.number_input("Academic Day", min_value=1, max_value=210, value=12)
-with col2:
-    duration = st.number_input("Duration (Mins)", min_value=30, max_value=60, value=40, step=5)
+# Generate the Calendar
+calendar_df = generate_annual_calendar(subject_data)
 
-# D. Lesson Phase Selector (The Duplicate Killer)
-# This lets the teacher specify if this is the Start, Middle, or End of the topic
-lesson_phase = st.sidebar.radio(
-    "Lesson Phase (prevents duplicate plans):",
-    ["Part 1: Concept Launch (Intro)", 
-     "Part 2: Deep Dive (Exploration)", 
-     "Part 3: Application (Workbook/Practice)", 
-     "Part 4: Assessment (Check for Understanding)"],
-    index=0
+# -----------------------------------------------------------------------------
+# 5. MAIN UI: ANNUAL CALENDAR DISPLAY
+# -----------------------------------------------------------------------------
+st.subheader(f"🗓️ Annual Pacing Guide: {selected_grade} - {selected_subject}")
+st.info(f"Total Outcomes: {len(subject_data)} | Teaching Days: 180 | Logic: Weighted Allocation")
+
+# Display the interactive dataframe
+st.dataframe(
+    calendar_df, 
+    use_container_width=True, 
+    height=400,
+    column_config={
+        "Day #": st.column_config.NumberColumn("Day", width="small"),
+        "Chapter": st.column_config.TextColumn("Chapter Name", width="medium"),
+        "Focus Outcome": st.column_config.TextColumn("Daily Learning Goal", width="large"),
+        "Lesson Phase": st.column_config.TextColumn("Lesson Phase", width="small"),
+    }
 )
 
-# Display Learning Outcomes
-with st.expander("🎯 Target Learning Outcomes for this Chapter", expanded=True):
-    for lo in learning_outcomes:
-        st.write(f"- {lo}")
+st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 4. THE PRECISION AI ENGINE
+# 6. STEP 2: SELECT DAY TO PLAN
 # -----------------------------------------------------------------------------
-def generate_precision_plan(grade, subject, chapter, outcomes, day, duration, phase):
+st.sidebar.header("2️⃣ Planner Controls")
+
+# User selects a day number
+selected_day_num = st.sidebar.number_input("Select Academic Day to Plan", min_value=1, max_value=180, value=1)
+
+# Retrieve Context from the Generated Calendar
+if not calendar_df.empty and selected_day_num <= len(calendar_df):
+    day_row = calendar_df[calendar_df['Day #'] == selected_day_num].iloc[0]
     
-    # Calculate exact minute splits
-    t_engage = int(duration * 0.15)  # 15%
-    t_explore = int(duration * 0.30) # 30%
-    t_explain = int(duration * 0.25) # 25%
-    t_elaborate = int(duration * 0.20) # 20%
-    t_evaluate = duration - (t_engage + t_explore + t_explain + t_elaborate) # Remainder
+    # Auto-fill context based on the calendar
+    target_chapter = day_row['Chapter']
+    target_outcome = day_row['Focus Outcome']
+    target_phase = day_row['Lesson Phase']
+    
+    st.success(f"✅ **Planning Context for Day {selected_day_num}:**")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Chapter", target_chapter)
+    col2.metric("Phase", target_phase)
+    col3.metric("Topic", target_outcome[:50]+"...")
+    
+else:
+    st.warning("Day out of range or no data.")
+    st.stop()
 
+duration = st.sidebar.slider("Duration (Mins)", 30, 60, 45)
+
+# -----------------------------------------------------------------------------
+# 7. AI GENERATION ENGINE
+# -----------------------------------------------------------------------------
+def generate_precision_plan(grade, subject, chapter, outcome, day, duration, phase):
+    
+    t_engage = int(duration * 0.15)
+    t_explore = int(duration * 0.30)
+    t_explain = int(duration * 0.25)
+    t_elaborate = int(duration * 0.20)
+    
     prompt = f"""
     You are the 'Teach+' Precision Planner.
     
     CRITICAL INSTRUCTION:
-    The user is asking for Day {day}. 
-    This is **{phase}** of the chapter "{chapter}".
-    **DO NOT** generate a generic introduction if the phase is "Deep Dive" or "Application".
-    **DO NOT** repeat content from previous days. This specific lesson must fit the phase exactly.
-
-    CONTEXT:
-    - **Grade:** {grade}
-    - **Subject:** {subject}
+    The user is asking for **Day {day}** of the Annual Pacing Calendar.
     - **Chapter:** {chapter}
-    - **Outcomes:** {outcomes}
-    - **Total Duration:** {duration} Minutes
+    - **Phase:** {phase} (Adjust tone accordingly: Intro vs. Practice vs. Test)
+    - **Primary Outcome:** {outcome}
 
     OUTPUT FORMAT (Markdown):
 
@@ -119,26 +192,18 @@ def generate_precision_plan(grade, subject, chapter, outcomes, day, duration, ph
 
     ### ⏰ 00:{t_engage:02d} - 00:{t_engage+t_explore:02d} | II. EXPLORE (The Activity)
     - **Activity Name:** ...
-    - **Micro-Steps:**
-      1. ...
-      2. ...
-    - **Teacher's Role:** (What to observe)
+    - **Micro-Steps:** ...
+    - **Teacher's Role:** (Observation Focus)
 
     ### ⏰ 00:{t_engage+t_explore:02d} - 00:{t_engage+t_explore+t_explain:02d} | III. EXPLAIN (The Concept)
-    - **Board Work:** (What to draw/write)
+    - **Board Work:** ...
     - **Scripted Explanation:** "Teacher explains..."
-    - **Vocabulary Check:** ...
 
     ### ⏰ 00:{t_engage+t_explore+t_explain:02d} - 00:{t_engage+t_explore+t_explain+t_elaborate:02d} | IV. ELABORATE (Application)
-    - **Differentiation:**
-      - *Advanced:* ...
-      - *Struggling:* ...
+    - **Task:** (Link to {outcome})
 
     ### ⏰ 00:{t_engage+t_explore+t_explain+t_elaborate:02d} - 00:{duration:02d} | V. EVALUATE (Exit Ticket)
     - **The Task:** ...
-    - **Success Criteria:** ...
-
-    Ensure the content is distinctly tailored to **{phase}**.
     """
     
     try:
@@ -146,39 +211,39 @@ def generate_precision_plan(grade, subject, chapter, outcomes, day, duration, ph
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert curriculum designer. You hate generic lesson plans. You love precision."},
+                {"role": "system", "content": "You are an expert curriculum designer. Precision is key."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.6 # Lower temperature for more consistent, less random results
+            temperature=0.6
         )
         return response.choices[0].message.content
     except Exception as e:
         return f"Error: {str(e)}"
 
 # -----------------------------------------------------------------------------
-# 5. GENERATE BUTTON
+# 8. GENERATE BUTTON
 # -----------------------------------------------------------------------------
-if st.button("🚀 Generate Timed Micro-Plan"):
+if st.button("🚀 Generate Plan for Day " + str(selected_day_num)):
     if "OPENAI_API_KEY" not in st.secrets:
-        st.error("⚠️ OpenAI API Key is missing! Please add it to Streamlit Secrets.")
+        st.error("⚠️ OpenAI API Key is missing!")
     else:
-        with st.spinner(f"Designing Day {day_number} ({lesson_phase})..."):
+        with st.spinner(f"Designing Day {selected_day_num} ({target_chapter})..."):
             plan = generate_precision_plan(
                 selected_grade, 
                 selected_subject, 
-                selected_chapter, 
-                learning_outcomes, 
-                day_number, 
+                target_chapter, 
+                target_outcome, 
+                selected_day_num, 
                 duration,
-                lesson_phase
+                target_phase
             )
             
             st.markdown("---")
             st.markdown(plan)
             
             st.download_button(
-                label="📥 Download Timed Plan",
+                label="📥 Download Plan",
                 data=plan,
-                file_name=f"TeachPlus_G{selected_grade}_{selected_subject}_Day{day_number}.md",
+                file_name=f"TeachPlus_Day{selected_day_num}.md",
                 mime="text/markdown"
             )
